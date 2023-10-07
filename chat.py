@@ -83,18 +83,20 @@ objQnA_list = queryLLMperQuestion(prompt1, objQnA_list)
 #iterate through the list and print the question and answer
 for objQnA in objQnA_list:
     if objQnA.answer !=None :
-        print(f' Q:, {objQnA.question}, A:, {objQnA.answer}, --- {objQnA.label} , {objQnA.key}')
+        objQnA.answer = objQnA.answer.strip()
+        # print(f' Q:, {objQnA.question}, A:, {objQnA.answer}, --- {objQnA.label} , {objQnA.key}')
 
+#create a dict to store score for each label
 # function to calculate score
-''' Here is how to score IPIP scales:
+''' Here is how to score IPIP scales: For every object in objQnA_list, if the answer is not None, then assign a score based on the key and answer. use a list to sum the score as per label.
 For + keyed items, the answer "Very Inaccurate" is assigned a value of 1, "Moderately Inaccurate" a value of 2, "Neither Inaccurate nor Accurate" a 3, "Moderately Accurate" a 4, and "Very Accurate" a value of 5.
 For - keyed items, the answer "Very Inaccurate" is assigned a value of 5, "Moderately Inaccurate" a value of 4, "Neither Inaccurate nor Accurate" a 3, "Moderately Accurate" a 2, and "Very Accurate" a value of 1.
 Once numbers are assigned for all of the items in the scale, just sum all the values to obtain a total scale score. '''
-
-# iterate through the list and identify the key and assign the score
+score_dict = {}
 for objQnA in objQnA_list:
     if objQnA.answer != None:
-        print(objQnA.key)
+        # remove trailing spaces from the answer
+        objQnA.answer = objQnA.answer.strip()
         if objQnA.key == 1:
             if objQnA.answer == 'Very Accurate':
                 objQnA.score = 5
@@ -117,4 +119,11 @@ for objQnA in objQnA_list:
                 objQnA.score = 4
             elif objQnA.answer == 'Very Inaccurate':
                 objQnA.score = 5
-print(f'score:, {objQnA.score}, --- {objQnA.label} ')
+        if objQnA.label not in score_dict:
+            score_dict[objQnA.label] = objQnA.score
+        else:
+            score_dict[objQnA.label] += objQnA.score
+print(score_dict)
+
+
+
