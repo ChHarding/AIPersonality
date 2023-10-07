@@ -2,6 +2,7 @@
 import openai
 import pandas as pd
 import os
+
 #use constants to store the API key and engine name
 openai.api_key = os.getenv("OPENAI_API_KEY")
 print(openai.api_key)
