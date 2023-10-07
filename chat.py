@@ -3,8 +3,7 @@ import openai
 import pandas as pd
 import os
 #use constants to store the API key and engine name
-# openai.api_key = os.getenv("OPENAI_API_KEY")
-openai.api_key = "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"
+openai.api_key = os.getenv("OPENAI_API_KEY")
 print(openai.api_key)
 engine = "gpt-4"
 
@@ -36,8 +35,8 @@ class ObjQnA:
         self.key = key
         self.question = question
         self.label = label
-        self.response = None # to store the response from ChatGPT-3
-        self.score= int() # to store the score based on the response
+        self.answer = None # to store the answer from ChatGPT-3
+        self.score= int() # to store the score based on the answer
 
 #Iterate through each row and store the values in the objQnA object
 def load_objQnA(df, row_count):
@@ -50,89 +49,71 @@ def load_objQnA(df, row_count):
 objQnA_list = load_objQnA(df, row_count)
 # print(objQnA_list)
 
-#function to access ObjQnA object and create a list of questions, adding all the questions to the list
-def get_questions(objQnA_list):
-    question_list = []
-    for objQnA in objQnA_list:
-        question_list.append(objQnA.question)
-    return question_list
+# Scale in future for more complex prompt engineering using .json file
+def enggPrompt():
+    system = "You are a human. You are engaged in a self assessment of your personality.You will be answering question about yourself"
+    # user = "Answer all of the questions and in the same order as they appear."
+    user=''
+    # assistant = "You will only use one of these as the answer, which ever is most accurate to you. Very Inaccurate, Moderately Inaccurate,Neither Inaccurate nor Accurate,Moderately Accurate,Very Accurate. The questions are as follows, every question is seperated by a fullstop:"
+    assistant = "You will only use one of these as the answer - Very Inaccurate, Moderately Inaccurate,Neither Inaccurate nor Accurate,Moderately Accurate,Very Accurate. You will not add any other text to your answer. The question is : "
+    return str(system + user + assistant)
 
-question_list = get_questions(objQnA_list)
-prompt1 = f"Let's engage in a personality assessment together. I'll present you with a series of self-reflective statements, and you can respond as if you were a person. Use the following scale to indicate your agreement with each statement: Very Inaccurate, Moderately Inaccurate,Neither Inaccurate nor Accurate,Moderately Accurate,Very Accurate. Only return the answers in the same order as the questions appear. At the end of your answer tell me how many questions you had. It starts from here :"
+# prompt1 = f"Let's engage in a personality assessment together. I have created a series of self-reflective statements, and you can respond as if you were a person. Use the following scale to indicate your agreement with each statement: Very Inaccurate, Moderately Inaccurate,Neither Inaccurate nor Accurate,Moderately Accurate,Very Accurate. Only return the answers in the same order as the questions appear. At the end of your answer tell me how many questions you had. It starts from here :"
+prompt1 = enggPrompt()
 prompt1 = str(prompt1)
-#Function to create a prompt string concatenating a string and all values in the question_list
-def construct_prompt(question_list):
-    prompt = ""
-    for question in question_list:
-        prompt += question
-    return str(prompt)
 
-prompt2 = construct_prompt(question_list)
-
-#create a prompt string concatenating prompt1 and prompt2, avoid Type Error
-prompt = prompt1 + prompt2
-#print(prompt)
-
-response = openai.Completion.create(
-  model="gpt-3.5-turbo-instruct", max_tokens=3900,
-  prompt=prompt
-)
-response_message = response['choices'][0]['text'] # uncomment if you want to see the response from Chat GPT-3
-print(response_message)
-#response_message = str("\nAgree\nDisagree\nAgree\nAgree\nAgree\n") # comment if you want to see the response from Chat GPT-3
-
-#Function to create a list of responses from the response_message
-def get_responses_list(response_message):
-    response_list = []
-    response_list = response_message.split('\n')
-    return response_list
-
-response_list = get_responses_list(response_message)
-# print(response_list.__len__())
-# remove the empty string from the list
-response_list = list(filter(None, response_list))
-
-def load_objQnA(objQnA_list,response_list, row_count):
-    for i in range(row_count):
-        objQnA_list[i].response = response_list[i]
+# Load objQnA in objQnA_list with answer from ChatGPT-3 for each question. one question at a time will increase the number of requests to OpenAI but decrease the number of tokens per request. The consistency on the answers must be explored by keeping the context consistent
+def queryLLMperQuestion(prompt1, objQnA_list):
+    for objQnA in objQnA_list:
+        if objQnA.answer == None:
+            prompt2 = prompt1
+            prompt2 += objQnA.question
+            prompt2 += "."
+            response = openai.Completion.create(model="gpt-3.5-turbo-instruct", max_tokens=3900,prompt=prompt2)
+            answer_message = response ['choices'][0]['text'] # uncomment if you want to see the answer from Chat GPT-3
+            answer = answer_message.strip('\n')
+            objQnA.answer = answer
     return objQnA_list
 
-# Add answers to the objects in the list
-objQnA_list = load_objQnA(objQnA_list,response_list, row_count)
+objQnA_list = queryLLMperQuestion(prompt1, objQnA_list)
 
-#iterate through the list and print the question and response
+
+
+#iterate through the list and print the question and answer
 for objQnA in objQnA_list:
-    if objQnA.response !=None :
-        print(f' Q:, {objQnA.question}, A:, {objQnA.response}, --- {objQnA.label} , {objQnA.key}')
+    if objQnA.answer !=None :
+        print(f' Q:, {objQnA.question}, A:, {objQnA.answer}, --- {objQnA.label} , {objQnA.key}')
 
 # function to calculate score
 ''' Here is how to score IPIP scales:
-For + keyed items, the response "Very Inaccurate" is assigned a value of 1, "Moderately Inaccurate" a value of 2, "Neither Inaccurate nor Accurate" a 3, "Moderately Accurate" a 4, and "Very Accurate" a value of 5.
-For - keyed items, the response "Very Inaccurate" is assigned a value of 5, "Moderately Inaccurate" a value of 4, "Neither Inaccurate nor Accurate" a 3, "Moderately Accurate" a 2, and "Very Accurate" a value of 1.
+For + keyed items, the answer "Very Inaccurate" is assigned a value of 1, "Moderately Inaccurate" a value of 2, "Neither Inaccurate nor Accurate" a 3, "Moderately Accurate" a 4, and "Very Accurate" a value of 5.
+For - keyed items, the answer "Very Inaccurate" is assigned a value of 5, "Moderately Inaccurate" a value of 4, "Neither Inaccurate nor Accurate" a 3, "Moderately Accurate" a 2, and "Very Accurate" a value of 1.
 Once numbers are assigned for all of the items in the scale, just sum all the values to obtain a total scale score. '''
 
 # iterate through the list and identify the key and assign the score
 for objQnA in objQnA_list:
-    if objQnA.response !=None :
-        if objQnA.key == '+':
-            if objQnA.response == 'Agree':
+    if objQnA.answer != None:
+        print(objQnA.key)
+        if objQnA.key == 1:
+            if objQnA.answer == 'Very Accurate':
                 objQnA.score = 5
-            elif objQnA.response == 'Disagree':
-                objQnA.score = 1
-            elif objQnA.response == 'Neither':
-                objQnA.score = 3
-            elif objQnA.response == 'Strongly Agree':
+            elif objQnA.answer == 'Moderately Accurate':
                 objQnA.score = 4
-            elif objQnA.response == 'Strongly Disagree':
+            elif objQnA.answer == 'Neither Inaccurate nor Accurate':
+                objQnA.score = 3
+            elif objQnA.answer == 'Moderately Inaccurate':
                 objQnA.score = 2
-        elif objQnA.key == '-':
-            if objQnA.response == 'Agree':
+            elif objQnA.answer == 'Very Inaccurate':
                 objQnA.score = 1
-            elif objQnA.response == 'Disagree':
+        elif objQnA.key == -1:
+            if objQnA.answer == 'Very Accurate':
+                objQnA.score = 1
+            elif objQnA.answer == 'Moderately Accurate':
+                objQnA.score = 2
+            elif objQnA.answer == 'Neither Inaccurate nor Accurate':
+                objQnA.score = 3
+            elif objQnA.answer == 'Moderately Inaccurate':
+                objQnA.score = 4
+            elif objQnA.answer == 'Very Inaccurate':
                 objQnA.score = 5
-            elif objQnA.response == 'Neither':
-                objQnA.score = 3
-            elif objQnA.response == 'Strongly Agree':
-                objQnA.score = 2
-            elif objQnA.response == 'Strongly Disagree':
-                objQnA.score = 4
+print(f'score:, {objQnA.score}, --- {objQnA.label} ')
