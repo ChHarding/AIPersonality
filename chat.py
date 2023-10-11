@@ -11,6 +11,14 @@ from langchain.chat_models import ChatOpenAI
 from langchain.prompts import ChatPromptTemplate
 from langchain.prompts.chat import SystemMessage, HumanMessagePromptTemplate
 
+# to write to excel sheet
+import openpyxl
+from openpyxl import Workbook
+from openpyxl.utils import get_column_letter
+from openpyxl.styles import Font
+
+import datetime
+
 #use constants to store the API key and engine name
 openai.api_key = os.getenv("OPENAI_API_KEY")
 print(openai.api_key)
@@ -105,7 +113,10 @@ def score(objQnA_list):
                 score_dict[objQnA.label] += objQnA.score
    
     # sort the score_dict by score
-    score_dict = dict(sorted(score_dict.items(), key=lambda item: item[1]))
+    # score_dict = dict(sorted(score_dict.items(), key=lambda item: item[1]))
+    # sort the items in ascending order of label
+    score_dict = dict(sorted(score_dict.items(), key=lambda item: item[0]))
+
     return score_dict,wrong_answers
 
 # Scale later for more prompt engineering
@@ -126,7 +137,7 @@ def statelessQuery(prompt1, objQnA_list):
             questionPrompt = prompt1
             questionPrompt += objQnA.question
             questionPrompt += "."
-            response = openai.Completion.create(model="gpt-3.5-turbo-instruct", max_tokens=3900,prompt=questionPrompt)
+            response = openai.Completion.create(model="gpt-3.5-turbo-instruct", max_tokens=500,prompt=questionPrompt)
             answer_message = response ['choices'][0]['text'] # uncomment if you want to see the answer from Chat GPT-3
             answer = answer_message.strip('\n')
             objQnA.answer = answer
@@ -150,7 +161,7 @@ prompt1 = enggPrompt()
 
 # set the Context using ConversationBufferMemory
 llm = ChatOpenAI(temperature=0.0)
-memory = ConversationBufferMemory(llm=engine, mem_token_limit=200)
+memory = ConversationBufferMemory(llm=engine, mem_token_limit=1)
 memory.save_context(inputs={"input": f"{prompt1}"}, outputs={"output": "Yes"})
 saved_context = memory.load_memory_variables(inputs={})
 contextBeforeQuery = saved_context
@@ -164,6 +175,64 @@ print(f"Final Retained Context is : {saved_context}")
 print(f"Final Score with memory: {score_dict_with_memory}")
 print(f'wrong answers : {wrong_answers}')
 
+#Function to the values from the score_dict_memory to the excel sheet
+def writeToExl (filename,workSheet,score_dict_with_memory):
+# if file doesnt exist already, create a new file and sheet
+    if not os.path.exists(filename):
+        # create a new workbook and sheet
+        wb = Workbook()
+        wb.save(filename)
+        wb = openpyxl.load_workbook(filename)
+        # create a new sheet
+        wb.create_sheet(workSheet)
+        sheet = wb[workSheet]
+        # get the current date and time
+        system_time = datetime.datetime.now()
+        # write the column headers Label and System Time
+        sheet['A1'] = 'Label'
+        sheet['B1'] = system_time
+        # add label and score from score_dict_with_memory to the excel sheet. Label as rows under column "Label" and score as rows under column "System Time"
+        row = 2
+        for label, score in score_dict_with_memory.items():
+            sheet['A' + str(row)] = label
+            sheet['B' + str(row)] = score
+            row += 1
+        # save the workbook
+        wb.save(filename)
+    else:
+        # open the existing workbook and sheet
+        wb = openpyxl.load_workbook(filename)
+        sheet = wb[workSheet]
+        # get the last column in the excel sheet
+        last_column = sheet.max_column
+        # get the current date and time
+        system_time = datetime.datetime.now()
+        # create a new column after the last column and write system time as the header
+        sheet[get_column_letter(last_column + 1) + '1'] = system_time
+        # add label and score from score_dict_with_memory. label as rows under column "Label" and score as rows under column "System Time"
+        row = 2
+        for label, score in score_dict_with_memory.items():
+            sheet['A' + str(row)] = label
+            sheet[get_column_letter(last_column + 1) + str(row)] = score
+            row += 1
+        # save the workbook
+        wb.save(filename)
+       
+# call the function to write to excel sheet
+filename = r'C:\Users\vasanthv\Downloads\ScoresDB.xlsx'
+workSheet = 'ScoresDB'
+writeToExl(filename,workSheet,score_dict_with_memory)
+
+'''
+# plot the graph for lables and scores add legend and title
+import matplotlib.pyplot as plt
+plt.bar(range(len(score_dict_with_memory)), list(score_dict_with_memory.values()), align='center')
+plt.xticks(range(len(score_dict_with_memory)), list(score_dict_with_memory.keys()))
+plt.xlabel('Labels')
+plt.ylabel('Scores')
+plt.title('Scores for each Label')
+plt.show()
+
 # clear all answers in objQnA_list before querying without memory
 for objQnA in objQnA_list:
     objQnA.answer = None
@@ -173,4 +242,8 @@ objQnA_list = statelessQuery(prompt1, objQnA_list)
 score_dict_without_memory,wrong_answers = score(objQnA_list)
 print("Querying without Memory...")
 print(f"Final Score without memory: {score_dict_without_memory}")
-print(f'wrong answers : {wrong_answers}')
+print(f'Incompatible answers : {wrong_answers}')
+
+'''
+
+
