@@ -4,28 +4,35 @@ import pandas as pd
 import os
 
 # to maintain memory state between multiple prompts. Conversation buffer moemory seems to use minimum tokens in this context as not all the answers  are needed in momory but the initial context is needed
-from langchain.memory import ConversationBufferMemory
+
+from langchain.memory import ConversationKGMemory
 from langchain.chains import ConversationChain
 from langchain.chat_models import ChatOpenAI
-#customise the prompt template to include system message and human message
-from langchain.prompts import ChatPromptTemplate
-from langchain.prompts.chat import SystemMessage, HumanMessagePromptTemplate
+from langchain.callbacks import get_openai_callback
+from langchain.prompts.prompt import PromptTemplate
+from langchain import OpenAI
 
 # to write to excel sheet
 import openpyxl
 from openpyxl import Workbook
 from openpyxl.utils import get_column_letter
-from openpyxl.styles import Font
 
 import datetime
+
 
 #use constants to store the API key and engine name
 openai.api_key = os.getenv("OPENAI_API_KEY")
 print(openai.api_key)
 engine = "gpt-4"
-file_path = r"C:\Users\vasanthv\Downloads\TedoneItemAssignmentTable30APR21.xlsx"
+file_path = r'C:\Users\vasanthv\OneDrive - Microsoft\MS HCI\Fall 2023\Python\AI Personality\AIPersonality\data\IPIPQuestionaire.xlsx'
+filename = r'C:\Users\vasanthv\OneDrive - Microsoft\MS HCI\Fall 2023\Python\AI Personality\AIPersonality\data\IPIP_ScoresDB.xlsx'
+# questionWorkSheet = 'Current' # subset of questions for testing
+questionWorkSheet = 'Complete' # all questions, takes longer time to run
+workSheet = 'ScoresDB'
+ansWorkSheet = 'AnswersLog'
+
 if os.path.exists(file_path):
-    df = pd.read_excel(file_path, sheet_name='data_nodupes')
+    df = pd.read_excel(file_path, questionWorkSheet)
 else:
     print("File not found at the specified path.")
 row_count = len(df.index) #total number of rows in the excel file
@@ -111,73 +118,79 @@ def score(objQnA_list):
                 score_dict[objQnA.label] = objQnA.score
             else:
                 score_dict[objQnA.label] += objQnA.score
-   
-    # sort the score_dict by score
-    # score_dict = dict(sorted(score_dict.items(), key=lambda item: item[1]))
+
     # sort the items in ascending order of label
     score_dict = dict(sorted(score_dict.items(), key=lambda item: item[0]))
 
     return score_dict,wrong_answers
-
-# Scale later for more prompt engineering
-def enggPrompt():
-    system = "You are a human. You are engaged in a self assessment of your personality.You will be answering question about yourself."
-    # user = "Answer all of the questions and in the same order as they appear."
-    user=''
-    # assistant = "You will only use one of these as the answer, which ever is most accurate to you. Very Inaccurate, Moderately Inaccurate,Neither Inaccurate nor Accurate,Moderately Accurate,Very Accurate. The questions are as follows, every question is seperated by a fullstop:"
-    assistant = "You will only use one of these as the answer - Very Inaccurate, Moderately Inaccurate,Neither Inaccurate nor Accurate,Moderately Accurate,Very Accurate. You will not add any other text to your answer. The question is : "
-    return str(system + user + assistant)
-
+    
 # Load objQnA in objQnA_list with answer from ChatGPT-3 for each question. one question at a time will increase the number of requests to OpenAI but decrease the number of tokens per request. The consistency on the answers must be explored by keeping the context consistent
-
-# Option 1 : Query LLM without memory
-def statelessQuery(prompt1, objQnA_list):
-    for objQnA in objQnA_list:
-        if objQnA.answer == None:
-            questionPrompt = prompt1
-            questionPrompt += objQnA.question
-            questionPrompt += "."
-            response = openai.Completion.create(model="gpt-3.5-turbo-instruct", max_tokens=500,prompt=questionPrompt)
-            answer_message = response ['choices'][0]['text'] # uncomment if you want to see the answer from Chat GPT-3
-            answer = answer_message.strip('\n')
-            objQnA.answer = answer
-    return objQnA_list
-
 # Option #2 query LLM with memory
-def queryWithMemory(llm,memory, objQnA_list):
+def queryWithMemory(llm,prompt, objQnA_list):
     # set memory to None
-    conversation = ConversationChain(llm=llm, memory=memory, verbose=True)
+    conversation = ConversationChain(llm=llm, verbose=False, prompt=prompt, memory=ConversationKGMemory(llm=llm))
+    ansCount = 0
     for objQnA in objQnA_list:
         if objQnA.answer == None:
             questionPrompt = str(objQnA.question)
-            response = conversation.predict(input = questionPrompt)
-            answer = response.strip('\n')
-            objQnA.answer = answer
-    return objQnA_list, saved_context
+            with get_openai_callback() as cb:
+                response = conversation.predict(input = questionPrompt)
+                answer = response.strip('\n')
+                objQnA.answer = answer
+                ansCount += 1
+                print(ansCount , " : ", questionPrompt, "-",  answer)
+                # print(cb.total_tokens, " tokens used")
+        
+    return objQnA_list
 
-# use this as a leading prompt to set the context for the conversation
-# later replace this by overriding the ChatPromptTemplate class for stateful conversation
-prompt1 = enggPrompt()
 
-# set the Context using ConversationBufferMemory
-llm = ChatOpenAI(temperature=0.0)
-memory = ConversationBufferMemory(llm=engine, mem_token_limit=1)
-memory.save_context(inputs={"input": f"{prompt1}"}, outputs={"output": "Yes"})
-saved_context = memory.load_memory_variables(inputs={})
-contextBeforeQuery = saved_context
 
-#queryLLM with memory
-objQnA_list1,saved_context = queryWithMemory(llm,memory, objQnA_list)
-score_dict_with_memory,wrong_answers = score(objQnA_list1) # score the answers from LLM
-print("Querying with Memory...")
-print(f"Context Before Query : {contextBeforeQuery}")
-print(f"Final Retained Context is : {saved_context}")
-print(f"Final Score with memory: {score_dict_with_memory}")
-print(f'wrong answers : {wrong_answers}')
+#Function to the values from the objQnA_list1 to the excel sheet
+import os
+import datetime
+import openpyxl
+from openpyxl.utils import get_column_letter
+from openpyxl import Workbook
 
-#Function to the values from the score_dict_memory to the excel sheet
-def writeToExl (filename,workSheet,score_dict_with_memory):
-# if file doesnt exist already, create a new file and sheet
+
+def recordAnswersToExl (filename,ansWorkSheet,objQnA_list1,recorded_time):
+    # load the workbook
+    wb = openpyxl.load_workbook(filename)
+    # check if the sheet exists, else create a new sheet
+    if ansWorkSheet not in wb.sheetnames:
+        wb.create_sheet(ansWorkSheet)
+        # get the sheet
+        sheet = wb[ansWorkSheet]
+        # write the column headers
+        sheet['A1'] = 'Number'
+        sheet['B1'] = 'Question'
+        sheet['C1'] = recorded_time
+        startRow = 2
+        for objQnA in objQnA_list1:
+            sheet['A' + str(startRow)] = objQnA.number
+            sheet['B' + str(startRow)] = objQnA.question
+            sheet['C' + str(startRow)] = objQnA.answer
+            startRow += 1
+        # save the workbook
+        wb.save(filename)
+    else:
+        # get the sheet
+        sheet = wb[ansWorkSheet]
+        # get the last column in the excel sheet
+        last_column = sheet.max_column
+        # create a new column after the last column and write system time as the header
+        sheet[get_column_letter(last_column + 1) + '1'] = recorded_time
+        startRow = 2
+        for objQnA in objQnA_list1:
+            sheet['A' + str(startRow)] = objQnA.number
+            sheet['B' + str(startRow)] = objQnA.question
+            sheet[get_column_letter(last_column + 1) + str(startRow)] = objQnA.answer
+            startRow += 1
+        # save the workbook
+        wb.save(filename)
+
+def scoreToExl (filename,workSheet,score_dict_with_memory):
+    # if file doesnt exist already, create a new file and sheet
     if not os.path.exists(filename):
         # create a new workbook and sheet
         wb = Workbook()
@@ -217,33 +230,36 @@ def writeToExl (filename,workSheet,score_dict_with_memory):
             row += 1
         # save the workbook
         wb.save(filename)
-       
-# call the function to write to excel sheet
-filename = r'C:\Users\vasanthv\Downloads\ScoresDB.xlsx'
-workSheet = 'ScoresDB'
-writeToExl(filename,workSheet,score_dict_with_memory)
+    return system_time
 
-'''
-# plot the graph for lables and scores add legend and title
-import matplotlib.pyplot as plt
-plt.bar(range(len(score_dict_with_memory)), list(score_dict_with_memory.values()), align='center')
-plt.xticks(range(len(score_dict_with_memory)), list(score_dict_with_memory.keys()))
-plt.xlabel('Labels')
-plt.ylabel('Scores')
-plt.title('Scores for each Label')
-plt.show()
+def main():
+    # set the Context using ConversationBufferMemory
+    llm = ChatOpenAI(temperature=0.0)
+    template = """This is a simulation.You will assume a role of human and you have human-like behaviour. You are engaged in a self assessment of your personality.You will answer question about yourself. 
+    Your will pick an answer that is closest to the human behaviour you simulate. You will only use one of these as the answer - Very Inaccurate, Moderately Inaccurate,Neither Inaccurate nor Accurate,Moderately Accurate,Very Accurate. 
+    You will not add any other text to your answer. The AI ONLY uses information contained in the "Relevant Information" section and does not hallucinate.
 
-# clear all answers in objQnA_list before querying without memory
-for objQnA in objQnA_list:
-    objQnA.answer = None
+    Relevant Information: 
 
-#queryLLM without memory
-objQnA_list = statelessQuery(prompt1, objQnA_list)
-score_dict_without_memory,wrong_answers = score(objQnA_list)
-print("Querying without Memory...")
-print(f"Final Score without memory: {score_dict_without_memory}")
-print(f'Incompatible answers : {wrong_answers}')
+    {history}
 
-'''
+    Conversation:
 
+    Human: {input}
+    AI:"""
+    prompt = PromptTemplate(input_variables=["history", "input"], template=template)
+    # queryLLM with memory
+    objQnA_list1 = queryWithMemory(llm,prompt, objQnA_list)
+    score_dict_with_memory,wrong_answers = score(objQnA_list1) # score the answers from LLM
+    print(f'wrong answers : {wrong_answers}')
+
+    # call the function to record score to excel sheet, return the system time to be used as the header for the answers sheet
+    recorded_time = scoreToExl(filename,workSheet,score_dict_with_memory)
+
+    # call the function to record answers to excel sheet.
+    recordAnswersToExl(filename,ansWorkSheet,objQnA_list1,recorded_time)
+
+
+if __name__ == '__main__':
+    main()
 
