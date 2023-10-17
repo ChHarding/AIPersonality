@@ -19,17 +19,16 @@ from openpyxl.utils import get_column_letter
 
 import datetime
 
-
 #use constants to store the API key and engine name
 openai.api_key = os.getenv("OPENAI_API_KEY")
 print(openai.api_key)
-engine = "gpt-4"
+engine = "gpt-3.5-turbo"
 file_path = r'C:\Users\vasanthv\OneDrive - Microsoft\MS HCI\Fall 2023\Python\AI Personality\AIPersonality\data\IPIPQuestionaire.xlsx'
 filename = r'C:\Users\vasanthv\OneDrive - Microsoft\MS HCI\Fall 2023\Python\AI Personality\AIPersonality\data\IPIP_ScoresDB.xlsx'
 # questionWorkSheet = 'Current' # subset of questions for testing
-questionWorkSheet = 'Complete' # all questions, takes longer time to run
-workSheet = 'ScoresDB'
-ansWorkSheet = 'AnswersLog'
+questionWorkSheet = 'NewIPIP' # all questions, takes longer time to run
+workSheet = 'NewIPIP_ScoresDB'
+ansWorkSheet = 'NewIPIP_AnswersLog'
 
 if os.path.exists(file_path):
     df = pd.read_excel(file_path, questionWorkSheet)
@@ -130,20 +129,17 @@ def queryWithMemory(llm,prompt, objQnA_list):
     # set memory to None
     conversation = ConversationChain(llm=llm, verbose=False, prompt=prompt, memory=ConversationKGMemory(llm=llm))
     ansCount = 0
-    for objQnA in objQnA_list:
-        if objQnA.answer == None:
-            questionPrompt = str(objQnA.question)
-            with get_openai_callback() as cb:
+    with get_openai_callback() as cb:
+        for objQnA in objQnA_list:
+            if objQnA.answer == None:
+                questionPrompt = str(objQnA.question)
                 response = conversation.predict(input = questionPrompt)
                 answer = response.strip('\n')
                 objQnA.answer = answer
                 ansCount += 1
                 print(ansCount , " : ", questionPrompt, "-",  answer)
-                # print(cb.total_tokens, " tokens used")
-        
+    print(cb.total_tokens, " tokens used. Cost of this request : ", cb.total_cost)
     return objQnA_list
-
-
 
 #Function to the values from the objQnA_list1 to the excel sheet
 import os
@@ -151,7 +147,6 @@ import datetime
 import openpyxl
 from openpyxl.utils import get_column_letter
 from openpyxl import Workbook
-
 
 def recordAnswersToExl (filename,ansWorkSheet,objQnA_list1,recorded_time):
     # load the workbook
@@ -234,7 +229,7 @@ def scoreToExl (filename,workSheet,score_dict_with_memory):
 
 def main():
     # set the Context using ConversationBufferMemory
-    llm = ChatOpenAI(temperature=0.0)
+    llm = ChatOpenAI(temperature=0.0,request_timeout=120)
     template = """This is a simulation.You will assume a role of human and you have human-like behaviour. You are engaged in a self assessment of your personality.You will answer question about yourself. 
     Your will pick an answer that is closest to the human behaviour you simulate. You will only use one of these as the answer - Very Inaccurate, Moderately Inaccurate,Neither Inaccurate nor Accurate,Moderately Accurate,Very Accurate. 
     You will not add any other text to your answer. The AI ONLY uses information contained in the "Relevant Information" section and does not hallucinate.
@@ -252,13 +247,10 @@ def main():
     objQnA_list1 = queryWithMemory(llm,prompt, objQnA_list)
     score_dict_with_memory,wrong_answers = score(objQnA_list1) # score the answers from LLM
     print(f'wrong answers : {wrong_answers}')
-
     # call the function to record score to excel sheet, return the system time to be used as the header for the answers sheet
     recorded_time = scoreToExl(filename,workSheet,score_dict_with_memory)
-
     # call the function to record answers to excel sheet.
     recordAnswersToExl(filename,ansWorkSheet,objQnA_list1,recorded_time)
-
 
 if __name__ == '__main__':
     main()
