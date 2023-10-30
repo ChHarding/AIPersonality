@@ -2,8 +2,8 @@ import pickle as pkl
 import pandas as pd
 
 # load the dataset with scores from the Pickle file
-pickle_folder = 'Pickle'
-with open(f'{pickle_folder}/IPIPDatasetWithScores.pkl', 'rb') as f:
+pickle_file = r'C:\Users\vasanthv\OneDrive - Microsoft\MS HCI\Fall 2023\ChatGPT-Personality\Pickle\IPIPDatasetWithScores.pkl'
+with open(pickle_file, 'rb') as f:
     IPIPDatasetWithScores = pkl.load(f)
 
 # define a function to change all answers to text values
