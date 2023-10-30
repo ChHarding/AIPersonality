@@ -23,8 +23,8 @@ import datetime
 openai.api_key = os.getenv("OPENAI_API_KEY")
 print(openai.api_key)
 engine = "gpt-3.5-turbo"
-file_path = r'data\IPIPQuestionaire.xlsx'
-filename = r'data\IPIP_ScoresDB.xlsx'
+file_path = r'AIPersonality\data\IPIPQuestionaire.xlsx'
+filename = r'AIPersonality\data\IPIP_ScoresDB.xlsx'
 # questionWorkSheet = 'Current' # subset of questions for testing
 questionWorkSheet = 'NewIPIP' # all questions, takes longer time to run
 workSheet = 'NewIPIP_ScoresDB'
