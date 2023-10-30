@@ -10,7 +10,7 @@ from langchain.chains import ConversationChain
 from langchain.chat_models import ChatOpenAI
 from langchain.callbacks import get_openai_callback
 from langchain.prompts.prompt import PromptTemplate
-from langchain import OpenAI
+
 
 # to write to excel sheet
 import openpyxl
