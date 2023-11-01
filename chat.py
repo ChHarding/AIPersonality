@@ -23,8 +23,8 @@ import datetime
 openai.api_key = os.getenv("OPENAI_API_KEY")
 print(openai.api_key)
 engine = "gpt-3.5-turbo"
-file_path = r'AIPersonality\data\IPIPQuestionaire.xlsx'
-filename = r'AIPersonality\data\IPIP_ScoresDB.xlsx'
+file_path = r'AIPersonality\Questionaire\IPIPBigFiveQuestionaire.xlsx'
+filename = r'AIPersonality\Results\IPIP_ScoresDB.xlsx'
 # questionWorkSheet = 'Current' # subset of questions for testing
 questionWorkSheet = 'NewIPIP' # all questions, takes longer time to run
 workSheet = 'NewIPIP_ScoresDB'
@@ -38,21 +38,20 @@ row_count = len(df.index) #total number of rows in the excel file
 column_list = df.columns.tolist() #list of column names in the excel file
 
 #define variable for each of the column
-column_list[0] = 'number'
-column_list[1] = 'instrument'
-column_list[2] = 'alpha'
-column_list[3] = 'key'
-column_list[4] = 'question'
-column_list[5] = 'label'
+column_list[0] = 'id'
+column_list[1] = 'code'
+column_list[2] = 'key'
+column_list[3] = 'text'
+column_list[4] = 'label'
+
 
 #create a class object to store values in each of the column across total row count
 class ObjQnA:
-    def __init__(self, number, instrument, alpha, key, question, label):
-        self.number = number
-        self.instrument = instrument
-        self.alpha = alpha
+    def __init__(self, id, code, key, text, label):
+        self.id = id
+        self.code = code
         self.key = key
-        self.question = question
+        self.text = text
         self.label = label
         self.answer = None # to store the answer from ChatGPT-3
         self.score= int() # to store the score based on the answer
@@ -61,7 +60,7 @@ class ObjQnA:
 def load_objQnA(df, row_count):
     objQnA_list = []
     for i in range(row_count):
-        objQnA = ObjQnA(df.iloc[i,0],df.iloc[i,1],df.iloc[i,2],df.iloc[i,3],df.iloc[i,4],df.iloc[i,5])
+        objQnA = ObjQnA(df.iloc[i,0],df.iloc[i,1],df.iloc[i,2],df.iloc[i,3],df.iloc[i,4])
         objQnA_list.append(objQnA)
     return objQnA_list
 
@@ -98,7 +97,7 @@ def score(objQnA_list):
                     objQnA.score = 1
                 else:
                     wrong_answers += 1
-                    print(f"Question : {objQnA.question} , Wrong Answer : {objQnA.answer}")
+                    print(f"Question : {objQnA.text} , Wrong Answer : {objQnA.answer}")
             elif objQnA.key == -1:
                 if objQnA.answer == 'very accurate':
                     objQnA.score = 1
@@ -112,7 +111,7 @@ def score(objQnA_list):
                     objQnA.score = 5
                 else:
                     wrong_answers += 1
-                    print(f"Question : {objQnA.question} , Wrong Answer : {objQnA.answer}")
+                    print(f"Question : {objQnA.text} , Wrong Answer : {objQnA.answer}")
             if objQnA.label not in score_dict:
                 score_dict[objQnA.label] = objQnA.score
             else:
@@ -132,7 +131,7 @@ def queryWithMemory(llm,prompt, objQnA_list):
     with get_openai_callback() as cb:
         for objQnA in objQnA_list:
             if objQnA.answer == None:
-                questionPrompt = str(objQnA.question)
+                questionPrompt = str(objQnA.text)
                 response = conversation.predict(input = questionPrompt)
                 answer = response.strip('\n')
                 objQnA.answer = answer
@@ -162,8 +161,8 @@ def recordAnswersToExl (filename,ansWorkSheet,objQnA_list1,recorded_time):
         sheet['C1'] = recorded_time
         startRow = 2
         for objQnA in objQnA_list1:
-            sheet['A' + str(startRow)] = objQnA.number
-            sheet['B' + str(startRow)] = objQnA.question
+            sheet['A' + str(startRow)] = objQnA.id
+            sheet['B' + str(startRow)] = objQnA.text
             sheet['C' + str(startRow)] = objQnA.answer
             startRow += 1
         # save the workbook
@@ -177,8 +176,8 @@ def recordAnswersToExl (filename,ansWorkSheet,objQnA_list1,recorded_time):
         sheet[get_column_letter(last_column + 1) + '1'] = recorded_time
         startRow = 2
         for objQnA in objQnA_list1:
-            sheet['A' + str(startRow)] = objQnA.number
-            sheet['B' + str(startRow)] = objQnA.question
+            sheet['A' + str(startRow)] = objQnA.id
+            sheet['B' + str(startRow)] = objQnA.text
             sheet[get_column_letter(last_column + 1) + str(startRow)] = objQnA.answer
             startRow += 1
         # save the workbook
