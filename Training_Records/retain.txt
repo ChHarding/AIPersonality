@@ -1,0 +1,4 @@
+fileid is file-cwHnJ4h9sl3H00AbzX2qEWVs
+jobid is ftjob-uDczeyj542VcdIWmHGnyNCEd
+
+HighAGRv1 - ft:gpt-3.5-turbo-0613:ia-state-university:model-name:8H6lzI86
