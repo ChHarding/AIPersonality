@@ -17,14 +17,28 @@ IPIPQuestions = pd.read_excel('AIPersonality\Questionaire\IPIPBigFiveQuestionair
 def replace_question_codes(df):
     return df.rename(columns=IPIPQuestions)
 
-def createTrainingDataset(df,trait,type):
+def createTrainingDataset(df, trait, type):
+    """
+    Creates training datasets based on the given dataframe.
+
+    Args:
+        df (pandas.DataFrame): The input dataframe containing the data.
+        trait (str): The trait being assessed.
+        type (int): The type of training dataset to create.
+
+    Returns:
+        None
+    """
+
     row_count = len(df.index)
     column_count = 50
     role_system_content = 'This is a simulation. You will assume a role of human and you have human-like behaviour. You are engaged in a self assessment of your personality.'
+
     if type == 1:
-        recordType='high'
+        recordType = 'high'
     else:
-        recordType='low'
+        recordType = 'low'
+
     # create a training example for each row in the dataframe. Each row is a training example. Each training example has 3 messages - system, user and assistant. system message is role_system_content, user message is the column header and assistant message is the value in the cell
     for row in range(row_count):
         for column in range(column_count):
@@ -32,7 +46,7 @@ def createTrainingDataset(df,trait,type):
                 trainingRecord = '{"messages": [{"role": "system", "content": "'+ role_system_content +'"}, {"role": "user", "content": "' + df.columns[column] + ' -> "}, {"role": "assistant", "content": "' + df.iloc[row, column] + '"}]}'
                 # write the training record to a JSONL file under a folder 'Training_Records. First time create the folder and file, after that append to the file
                 with open(f'AIPersonality/Training_Records/{recordType}_{trait}_scores.jsonl', 'a') as f:
-                    f.write(trainingRecord + '\n')  
+                    f.write(trainingRecord + '\n')
  
 # remove records that has 0 in any of the answers
 print('Row count before removing records with 0 in any of the answers:', len(IPIPDatasetWithScores))

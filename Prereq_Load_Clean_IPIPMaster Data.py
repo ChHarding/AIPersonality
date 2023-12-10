@@ -1,3 +1,19 @@
+"""
+This script loads and cleans the IPIP dataset, calculates personality scores, identifies outliers, and stores the cleaned dataset with scores in both pickle and shelved file formats.
+
+Steps:
+1. Load the dataset from the specified file path.
+2. Remove records with missing values.
+3. Calculate the frequency of each value in each row and remove rows with overused values based on a threshold.
+4. Calculate personality scores for each trait.
+5. Identify outliers using z-scores and a specified threshold.
+6. Remove outliers from the dataset.
+7. Store the cleaned dataset with scores in a pickle file.
+8. Store the cleaned dataset with scores in a shelved file.
+
+Note: The file paths for the dataset, pickle folder, and shelve folder are specified in the script.
+"""
+
 import pandas as pd
 import numpy as np
 import shelve as sh
